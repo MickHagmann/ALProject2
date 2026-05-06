@@ -4,7 +4,7 @@ page 123456746 Team20_DateList
     Caption = 'Team20_DateList';
     PageType = Card;
     SourceTable = "Date";
-    
+
     layout
     {
         area(Content)
@@ -12,7 +12,7 @@ page 123456746 Team20_DateList
             group(General)
             {
                 Caption = 'General';
-                
+
                 field("Period Type"; Rec."Period Type")
                 {
                     ToolTip = 'Specifies the value of the Period Type field.', Comment = '%';
