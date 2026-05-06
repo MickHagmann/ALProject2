@@ -186,5 +186,5 @@ page 123456745 nkolev_calculator
 
         //setting  var for string holding date difference with type text, using it to store the result of the format(int,0,0) method that spews out a string
         //date_resultstring: Text; actually we already defined string 1 in the beginning and only set the caption, we can still use the var 
-    
+    //sample comment to try github issue 
 }
