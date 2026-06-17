@@ -4,7 +4,7 @@ page 123456747 T20_ControlPanel
     Caption = 'T20_ControlPanel';
     PageType = List;
     SourceTable = "Employee Absence";
-//hello worls
+
     layout
     {
         area(Content)
