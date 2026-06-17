@@ -2,7 +2,7 @@ table 123456749 T20_DimCause_table
 {
     Caption = 'T20 Dim Cause';
     DataClassification = CustomerContent;
-
+    //hello
     fields
     {
         field(1; "Cause Code"; Code[10])
