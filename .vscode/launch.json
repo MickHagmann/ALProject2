@@ -11,7 +11,7 @@
             "port":10026,
             "authentication": "UserPassword",
             "schemaUpdateMode": "ForceSync",
-            "startupObjectId": 123456745,
+            "startupObjectId": 123456747,
             "startupObjectType": "Page",
             "breakOnError": "All",
             "launchBrowser": true,
