@@ -1,4 +1,4 @@
-codeunit 123456759 CreateBericht1
+codeunit 123456758 CreateBericht1
 {
     trigger OnRun()
     begin
@@ -11,58 +11,85 @@ codeunit 123456759 CreateBericht1
         DimTime: Record T20_DimTime_table;
         TFT_STAR_Joined: Record T20_TFT_STAR_Joined_table;
         ReportOut: Record T20_Report_i_Output_table;
-        varTargetMonth: Text[30];
+        months: array[3] of Text[30];
+        selected: array[3] of Boolean;
+        m: Integer;
+        weekdays: array[5] of Text[20];
+        i: Integer;
         varTargetYear: Integer;
-        varTargetWeekday: Text[30];
         sum_sick_days: Integer;
         emp_count: Integer;
         workday_occurrence_count: Integer;
         total_possible_workdays: Integer;
         krankenquote: Decimal;
     begin
-        // 1. Parameter setzen
-        varTargetMonth := 'Januar';
         varTargetYear := 2026;
-        varTargetWeekday := 'Monday';   // muss zum Wert in DimTime passen
 
-        // 2. Krankheitstage aus STAR Joined zählen
-        TFT_STAR_Joined.Reset();
-        TFT_STAR_Joined.SetRange(Month, varTargetMonth);
-        TFT_STAR_Joined.SetRange(Year, varTargetYear);
-        TFT_STAR_Joined.SetRange(Weekday, varTargetWeekday);
-        TFT_STAR_Joined.SetRange("Cause of Absence Code", 'KRANK');
-        sum_sick_days := TFT_STAR_Joined.Count();
+        months[1] := 'December';
+        months[2] := 'January';
+        months[3] := 'February';
 
-        // 3. Theoretische Arbeitstage ermitteln
-        DimEmployee.Reset();
+        if not InputMonths(months, selected) then
+            exit;
+
+        weekdays[1] := 'Monday';
+        weekdays[2] := 'Tuesday';
+        weekdays[3] := 'Wednesday';
+        weekdays[4] := 'Thursday';
+        weekdays[5] := 'Friday';
+
+        ReportOut.DeleteAll();
         emp_count := DimEmployee.Count();
 
-        DimTime.Reset();
-        DimTime.SetRange(Month, varTargetMonth);
-        DimTime.SetRange(Year, varTargetYear);
-        DimTime.SetRange(Weekday, varTargetWeekday);
-        DimTime.SetRange(Workday, true);
-        workday_occurrence_count := DimTime.Count();
+        for m := 1 to 3 do begin
+            if selected[m] then begin
+                for i := 1 to 5 do begin
+                    TFT_STAR_Joined.Reset();
+                    TFT_STAR_Joined.SetRange(Month, months[m]);
+                    TFT_STAR_Joined.SetRange(Year, varTargetYear);
+                    TFT_STAR_Joined.SetRange(Weekday, weekdays[i]);
+                    TFT_STAR_Joined.SetRange("Cause of Absence Code", 'KRANK');
+                    sum_sick_days := TFT_STAR_Joined.Count();
 
-        total_possible_workdays := emp_count * workday_occurrence_count;
+                    DimTime.Reset();
+                    DimTime.SetRange(Month, months[m]);
+                    DimTime.SetRange(Year, varTargetYear);
+                    DimTime.SetRange(Weekday, weekdays[i]);
+                    DimTime.SetRange(Workday, true);
+                    workday_occurrence_count := DimTime.Count();
 
-        // 4. Quote berechnen
-        if total_possible_workdays > 0 then
-            krankenquote := sum_sick_days / total_possible_workdays
-        else
-            krankenquote := 0.0;
+                    total_possible_workdays := emp_count * workday_occurrence_count;
 
-        // 5. Ergebnis in Output-Tabelle schreiben
-        if ReportOut.Get(varTargetWeekday) then
-            ReportOut.Delete();
-        ReportOut.Init();
-        ReportOut.Weekday := varTargetWeekday;
-        ReportOut.SickDays := sum_sick_days;
-        ReportOut.PossibleWorkdays := total_possible_workdays;
-        ReportOut.Krankenquote := krankenquote;
-        ReportOut.Insert();
+                    if total_possible_workdays > 0 then
+                        krankenquote := sum_sick_days / total_possible_workdays
+                    else
+                        krankenquote := 0.0;
 
-        Message('Bericht i berechnet für %1: Krankenquote = %2', varTargetWeekday, krankenquote);
+                    ReportOut.Init();
+                    ReportOut."SelectedMonth" := months[m];
+                    ReportOut.Weekday := weekdays[i];
+                    ReportOut.SickDays := sum_sick_days;
+                    ReportOut.PossibleWorkdays := total_possible_workdays;
+                    ReportOut.Krankenquote := krankenquote;
+                    ReportOut.Insert();
+                end;
+            end;
+        end;
+
+        Message('Report i berechnet für die gewählten Monate.');
+    end;
+
+    procedure InputMonths(months: array[3] of Text[30]; var selected: array[3] of Boolean): Boolean
+    var
+        m: Integer;
+        anySelected: Boolean;
+    begin
+        anySelected := false;
+        for m := 1 to 3 do begin
+            selected[m] := Confirm('Monat %1 in den Bericht einbeziehen?', false, months[m]);
+            if selected[m] then
+                anySelected := true;
+        end;
+        exit(anySelected);
     end;
 }
-

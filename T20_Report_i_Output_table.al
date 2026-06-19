@@ -9,6 +9,7 @@ table 123456758 T20_Report_i_Output_table
         field(2; SickDays; Integer) { Caption = 'Sick Days'; }
         field(3; PossibleWorkdays; Integer) { Caption = 'Possible Workdays'; }
         field(4; Krankenquote; Decimal) { Caption = 'Krankenquote'; }
+        field(5; SelectedMonth; Text[20]) { Caption = 'Selected Month'; }
     }
 
     keys

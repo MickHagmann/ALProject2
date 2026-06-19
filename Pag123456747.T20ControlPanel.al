@@ -183,7 +183,7 @@ page 123456747 T20_ControlPanel
                         repeat
                             dim_time.Init();
                             dim_time.Date := date_rec."Period Start";
-                            dim_time.Weekday := Format(date_rec."Period Start", 0, '<Weekday>');
+                            dim_time.Weekday := Format(date_rec."Period Start", 0, '<Weekday Text>');
                             dim_time.Year := Date2DMY(date_rec."Period Start", 3);
                             dim_time.Month := Format(date_rec."Period Start", 0, '<Month Text>');
                             dim_time.Workday := (Date2DWY(date_rec."Period Start", 1) <= 5);
@@ -489,6 +489,56 @@ page 123456747 T20_ControlPanel
     trigger OnOpenPage()
     begin
         MsgTxt := '(noch keine Aktion ausgeführt)';
+    end;
+
+    procedure GetWeekdayName(DayNum: Integer): Text[20]
+    begin
+        case DayNum of
+            1:
+                exit('Montag');
+            2:
+                exit('Dienstag');
+            3:
+                exit('Mittwoch');
+            4:
+                exit('Donnerstag');
+            5:
+                exit('Freitag');
+            6:
+                exit('Samstag');
+            7:
+                exit('Sonntag');
+        end;
+    end;
+
+    procedure GetMonthName(MonthNum: Integer): Text[20]
+    begin
+        case MonthNum of
+            1:
+                exit('Januar');
+            2:
+                exit('Februar');
+            3:
+                exit('März');
+            4:
+                exit('April');
+            5:
+                exit('Mai');
+            6:
+                exit('Juni');
+            7:
+                exit('Juli');
+            8:
+                exit('August');
+            9:
+                exit('September');
+            10:
+                exit('Oktober');
+            11:
+                exit('November');
+            12:
+                exit('Dezember');
+        end;
     end;
 
     var
