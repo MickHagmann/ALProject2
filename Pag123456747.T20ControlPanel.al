@@ -311,7 +311,6 @@ page 123456747 T20_ControlPanel
                 end;
             }
 
-
             action(FillASFT)
             {
                 ApplicationArea = All;
@@ -420,7 +419,8 @@ page 123456747 T20_ControlPanel
                             if month_rec.FindSet() then begin
                                 repeat
                                     month_num := month_rec.Year mod 12;
-                                    if month_num = 0 then month_num := 12;
+                                    if month_num = 0 then
+                                        month_num := 12;
                                     month_start := DMY2Date(1, month_num, month_rec.Year);
                                     month_end := CalcDate('<CM>', month_start);
                                     tft_filter.Reset();
@@ -437,7 +437,8 @@ page 123456747 T20_ControlPanel
                                     dim_time_filter.SetRange(Date, month_start, month_end);
                                     dim_time_filter.SetRange(Workday, true);
                                     workday_count := dim_time_filter.Count() - 2;
-                                    if workday_count < 0 then workday_count := 0;
+                                    if workday_count < 0 then
+                                        workday_count := 0;
                                     psft_rec.Init();
                                     psft_rec."Month ID" := month_rec.Month;
                                     psft_rec."Employee No." := emp_rec."Employee No.";
@@ -470,17 +471,212 @@ page 123456747 T20_ControlPanel
                     CurrPage.Update(false);
                 end;
             }
-            action(CreateBericht1)
+
+            action(GenerateBericht1)
             {
                 ApplicationArea = All;
-                Caption = 'Bericht i generieren (Krankenquote)';
+                Caption = 'Bericht i generieren (Krankenquote nach Wochentag)';
                 Promoted = true;
                 PromotedCategory = Process;
                 trigger OnAction()
                 var
-                    CreateBericht1: Codeunit CreateBericht1;
+                    DimEmployee: Record T20_DimEmployee_table;
+                    DimTime: Record T20_DimTime_table;
+                    TFT_Joined: Record T20_TFT_STAR_Joined_table;
+                    report_out: Record T20_Report_Output_table;
+                    months: array[3] of Text[30];
+                    selected: array[3] of Boolean;
+                    m: Integer;
+                    weekdays: array[5] of Text[20];
+                    i: Integer;
+                    varTargetYear: Integer;
+                    sum_sick: Integer;
+                    emp_count: Integer;
+                    workday_occ: Integer;
+                    total_possible: Integer;
+                    quote: Decimal;
                 begin
-                    CreateBericht1.Run();
+                    varTargetYear := 2026;
+                    months[1] := 'December';
+                    months[2] := 'January';
+                    months[3] := 'February';
+
+                    if not InputMonths(months, selected) then
+                        exit;
+
+                    weekdays[1] := 'Monday';
+                    weekdays[2] := 'Tuesday';
+                    weekdays[3] := 'Wednesday';
+                    weekdays[4] := 'Thursday';
+                    weekdays[5] := 'Friday';
+
+                    report_out.SetRange(ReportType, 'i');
+                    report_out.DeleteAll();
+
+                    emp_count := DimEmployee.Count();
+
+                    for m := 1 to 3 do begin
+                        if selected[m] then begin
+                            for i := 1 to 5 do begin
+                                TFT_Joined.Reset();
+                                TFT_Joined.SetRange(Month, months[m]);
+                                TFT_Joined.SetRange(Year, varTargetYear);
+                                TFT_Joined.SetRange(Weekday, weekdays[i]);
+                                TFT_Joined.SetRange("Cause of Absence Code", 'KRANK');
+                                sum_sick := TFT_Joined.Count();
+
+                                DimTime.Reset();
+                                DimTime.SetRange(Month, months[m]);
+                                DimTime.SetRange(Year, varTargetYear);
+                                DimTime.SetRange(Weekday, weekdays[i]);
+                                DimTime.SetRange(Workday, true);
+                                workday_occ := DimTime.Count();
+
+                                total_possible := emp_count * workday_occ;
+
+                                if total_possible > 0 then
+                                    quote := sum_sick / total_possible
+                                else
+                                    quote := 0.0;
+
+                                report_out.Init();
+                                report_out.ReportType := 'i';
+                                report_out.Aufriss1 := weekdays[i];
+                                report_out.Aufriss2 := months[m];
+                                report_out.Fakt1 := sum_sick;
+                                report_out.Fakt2 := total_possible;
+                                report_out.Quote := quote;
+                                report_out.Insert();
+                            end;
+                        end;
+                    end;
+
+                    Message('Bericht i berechnet.');
+                end;
+            }
+
+            action(GenerateBericht2)
+            {
+                ApplicationArea = All;
+                Caption = 'Bericht ii generieren (Montags-Anteil nach Abteilung)';
+                Promoted = true;
+                PromotedCategory = Process;
+                trigger OnAction()
+                var
+                    DimEmployee: Record T20_DimEmployee_table;
+                    ASFT_Joined: Record T20_ASFT_STAR_Joined_table;
+                    report_out: Record T20_Report_Output_table;
+                    varTargetYear: Integer;
+                    count_all: Integer;
+                    count_monday: Integer;
+                    quote: Decimal;
+                begin
+                    varTargetYear := 2026;
+
+                    report_out.SetRange(ReportType, 'ii');
+                    report_out.DeleteAll();
+
+                    DimEmployee.Reset();
+                    DimEmployee.SetCurrentKey(Department);
+                    if DimEmployee.FindSet() then begin
+                        repeat
+                            report_out.Reset();
+                            if not report_out.Get('ii', DimEmployee.Department, '') then begin
+                                ASFT_Joined.Reset();
+                                ASFT_Joined.SetRange(Department, DimEmployee.Department);
+                                ASFT_Joined.SetRange(Year, varTargetYear);
+                                ASFT_Joined.SetRange(Duration, 1);
+                                ASFT_Joined.SetRange(Category, 'Unplanned');
+                                count_all := ASFT_Joined.Count();
+
+                                ASFT_Joined.SetRange(Weekday, 'Monday');
+                                count_monday := ASFT_Joined.Count();
+
+                                if count_all > 0 then
+                                    quote := count_monday / count_all
+                                else
+                                    quote := 0.0;
+
+                                report_out.Init();
+                                report_out.ReportType := 'ii';
+                                report_out.Aufriss1 := DimEmployee.Department;
+                                report_out.Aufriss2 := '';
+                                report_out.Fakt1 := count_monday;
+                                report_out.Fakt2 := count_all;
+                                report_out.Quote := quote;
+                                report_out.Insert();
+                            end;
+                        until DimEmployee.Next() = 0;
+                    end;
+
+                    Message('Bericht ii berechnet für %1.', varTargetYear);
+                end;
+            }
+
+            action(GenerateBericht3)
+            {
+                ApplicationArea = All;
+                Caption = 'Bericht iii generieren (Krankenstand nach Jahr)';
+                Promoted = true;
+                PromotedCategory = Process;
+                trigger OnAction()
+                var
+                    dim_time2: Record T20_DimTime2_table;
+                    psft_joined: Record T20_PSFT_STAR_Joined_table;
+                    report_out: Record T20_Report_Output_table;
+                    processedYear: array[10] of Integer;
+                    yearCount: Integer;
+                    y: Integer;
+                    alreadyDone: Boolean;
+                    sum_sick: Integer;
+                    sum_netto: Integer;
+                    quote: Decimal;
+                begin
+                    report_out.SetRange(ReportType, 'iii');
+                    report_out.DeleteAll();
+
+                    yearCount := 0;
+
+                    dim_time2.Reset();
+                    if dim_time2.FindSet() then begin
+                        repeat
+                            alreadyDone := false;
+                            for y := 1 to yearCount do
+                                if processedYear[y] = dim_time2.Year then
+                                    alreadyDone := true;
+
+                            if not alreadyDone then begin
+                                yearCount += 1;
+                                processedYear[yearCount] := dim_time2.Year;
+
+                                psft_joined.Reset();
+                                psft_joined.SetRange(Year, dim_time2.Year);
+                                sum_sick := 0;
+                                sum_netto := 0;
+                                if psft_joined.FindSet() then
+                                    repeat
+                                        sum_sick += psft_joined."Sick Days in Month";
+                                        sum_netto += psft_joined."Possible Workdays";
+                                    until psft_joined.Next() = 0;
+
+                                if sum_netto > 0 then
+                                    quote := sum_sick / sum_netto
+                                else
+                                    quote := 0.0;
+
+                                report_out.Init();
+                                report_out.ReportType := 'iii';
+                                report_out.Aufriss1 := Format(dim_time2.Year);
+                                report_out.Aufriss2 := '';
+                                report_out.Fakt1 := sum_sick;
+                                report_out.Fakt2 := sum_netto;
+                                report_out.Quote := quote;
+                                report_out.Insert();
+                            end;
+                        until dim_time2.Next() = 0;
+                    end;
+
+                    Message('Bericht iii berechnet.');
                 end;
             }
         }
@@ -491,54 +687,18 @@ page 123456747 T20_ControlPanel
         MsgTxt := '(noch keine Aktion ausgeführt)';
     end;
 
-    procedure GetWeekdayName(DayNum: Integer): Text[20]
+    procedure InputMonths(months: array[3] of Text[30]; var selected: array[3] of Boolean): Boolean
+    var
+        m: Integer;
+        anySelected: Boolean;
     begin
-        case DayNum of
-            1:
-                exit('Montag');
-            2:
-                exit('Dienstag');
-            3:
-                exit('Mittwoch');
-            4:
-                exit('Donnerstag');
-            5:
-                exit('Freitag');
-            6:
-                exit('Samstag');
-            7:
-                exit('Sonntag');
+        anySelected := false;
+        for m := 1 to 3 do begin
+            selected[m] := Confirm('Monat %1 einbeziehen?', false, months[m]);
+            if selected[m] then
+                anySelected := true;
         end;
-    end;
-
-    procedure GetMonthName(MonthNum: Integer): Text[20]
-    begin
-        case MonthNum of
-            1:
-                exit('Januar');
-            2:
-                exit('Februar');
-            3:
-                exit('März');
-            4:
-                exit('April');
-            5:
-                exit('Mai');
-            6:
-                exit('Juni');
-            7:
-                exit('Juli');
-            8:
-                exit('August');
-            9:
-                exit('September');
-            10:
-                exit('Oktober');
-            11:
-                exit('November');
-            12:
-                exit('Dezember');
-        end;
+        exit(anySelected);
     end;
 
     var
