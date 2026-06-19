@@ -121,7 +121,7 @@ page 123456747 T20_ControlPanel
                         until emp_source.Next() = 0;
                     end;
                     MsgTxt := 'DimEmployee befüllt.';
-                    Message('DimEmployee befüllt: %1 Datensätze eingefügt.', counter);
+                    Message('DimEmployee befüllt: %1 Datensätze.', counter);
                     CurrPage.Update(false);
                 end;
             }
@@ -158,7 +158,7 @@ page 123456747 T20_ControlPanel
                         until cause_source.Next() = 0;
                     end;
                     MsgTxt := 'DimCause befüllt.';
-                    Message('DimCause befüllt: %1 Datensätze eingefügt.', counter);
+                    Message('DimCause befüllt: %1 Datensätze.', counter);
                     CurrPage.Update(false);
                 end;
             }
@@ -192,7 +192,7 @@ page 123456747 T20_ControlPanel
                         until date_rec.Next() = 0;
                     end;
                     MsgTxt := 'DimTime befüllt.';
-                    Message('DimTime befüllt: %1 Datensätze eingefügt.', counter);
+                    Message('DimTime befüllt: %1 Datensätze.', counter);
                     CurrPage.Update(false);
                 end;
             }
@@ -232,7 +232,7 @@ page 123456747 T20_ControlPanel
                         until date_rec.Next() = 0;
                     end;
                     MsgTxt := 'DimTime(2) befüllt.';
-                    Message('DimTime(2) befüllt: %1 Monate eingefügt.', counter);
+                    Message('DimTime(2) befüllt: %1 Monate.', counter);
                     CurrPage.Update(false);
                 end;
             }
@@ -240,19 +240,23 @@ page 123456747 T20_ControlPanel
             action(FillTFT)
             {
                 ApplicationArea = All;
-                Caption = 'TFT befüllen';
+                Caption = 'TFT + STAR Joined befüllen';
                 Promoted = true;
                 PromotedCategory = Process;
                 trigger OnAction()
                 var
                     abs_rec: Record "Employee Absence";
                     dim_time: Record T20_DimTime_table;
+                    dim_emp: Record T20_DimEmployee_table;
+                    dim_cause: Record T20_DimCause_table;
                     tft_rec: Record T20_TFT_table;
+                    joined: Record T20_TFT_STAR_Joined_table;
                     current_day: Date;
                     counter: Integer;
                 begin
                     counter := 0;
                     tft_rec.DeleteAll();
+                    joined.DeleteAll();
                     abs_rec.SetFilter("Employee No.", 'T20*');
                     if abs_rec.FindSet() then begin
                         repeat
@@ -262,15 +266,38 @@ page 123456747 T20_ControlPanel
                                 while current_day <= abs_rec."To Date" do begin
                                     if dim_time.Get(current_day) then begin
                                         if dim_time.Workday then begin
-                                            tft_rec.Init();
-                                            tft_rec."Employee No." := abs_rec."Employee No.";
-                                            tft_rec.Date := current_day;
-                                            tft_rec."Entry No." := abs_rec."Entry No.";
-                                            tft_rec."Cause of Absence Code" := abs_rec."Cause of Absence Code";
-                                            tft_rec.Weekday := dim_time.Weekday;
-                                            tft_rec.Workday := true;
-                                            if tft_rec.Insert(false) then
+                                            if not tft_rec.Get(abs_rec."Employee No.", current_day) then begin
+                                                tft_rec.Init();
+                                                tft_rec."Employee No." := abs_rec."Employee No.";
+                                                tft_rec.Date := current_day;
+                                                tft_rec."Entry No." := abs_rec."Entry No.";
+                                                tft_rec."Cause of Absence Code" := abs_rec."Cause of Absence Code";
+                                                tft_rec.Weekday := dim_time.Weekday;
+                                                tft_rec.Workday := true;
+                                                tft_rec.Insert();
+
+                                                joined.Init();
+                                                joined."Employee No." := abs_rec."Employee No.";
+                                                joined.Date := current_day;
+                                                joined."Entry No." := abs_rec."Entry No.";
+                                                joined."Cause of Absence Code" := abs_rec."Cause of Absence Code";
+                                                joined.Weekday := dim_time.Weekday;
+                                                joined.Workday := true;
+                                                joined.Year := dim_time.Year;
+                                                joined.Month := dim_time.Month;
+                                                if dim_emp.Get(abs_rec."Employee No.") then begin
+                                                    joined."First Name" := dim_emp."First Name";
+                                                    joined."Last Name" := dim_emp."Last Name";
+                                                    joined.Department := dim_emp.Department;
+                                                    joined."Employment Date" := dim_emp."Employment Date";
+                                                end;
+                                                if dim_cause.Get(abs_rec."Cause of Absence Code") then begin
+                                                    joined.Description := dim_cause.Description;
+                                                    joined.Category := dim_cause.Category;
+                                                end;
+                                                joined.Insert();
                                                 counter += 1;
+                                            end;
                                         end;
                                     end;
                                     current_day := current_day + 1;
@@ -278,29 +305,34 @@ page 123456747 T20_ControlPanel
                             end;
                         until abs_rec.Next() = 0;
                     end;
-                    MsgTxt := 'TFT befüllt.';
-                    Message('TFT befüllt: %1 Tagesdatensätze eingefügt.', counter);
+                    MsgTxt := 'TFT + STAR Joined befüllt.';
+                    Message('TFT + STAR Joined befüllt: %1 Tagesdatensätze.', counter);
                     CurrPage.Update(false);
                 end;
             }
 
+
             action(FillASFT)
             {
                 ApplicationArea = All;
-                Caption = 'ASFT befüllen';
+                Caption = 'ASFT + STAR Joined befüllen';
                 Promoted = true;
                 PromotedCategory = Process;
                 trigger OnAction()
                 var
                     abs_rec: Record "Employee Absence";
                     dim_time: Record T20_DimTime_table;
+                    dim_emp: Record T20_DimEmployee_table;
+                    dim_cause: Record T20_DimCause_table;
                     asft_rec: Record T20_ASFT_table;
+                    joined: Record T20_ASFT_STAR_Joined_table;
                     current_day: Date;
                     workday_count: Integer;
                     counter: Integer;
                 begin
                     counter := 0;
                     asft_rec.DeleteAll();
+                    joined.DeleteAll();
                     abs_rec.SetFilter("Employee No.", 'T20*');
                     if abs_rec.FindSet() then begin
                         repeat
@@ -323,13 +355,37 @@ page 123456747 T20_ControlPanel
                                     asft_rec."Reason ID" := abs_rec."Cause of Absence Code";
                                     asft_rec.Duration := workday_count;
                                     asft_rec.Insert();
+                                    joined.Init();
+                                    joined."Absence ID" := abs_rec."Entry No.";
+                                    joined."Employee ID" := abs_rec."Employee No.";
+                                    joined."Starting Date ID" := abs_rec."From Date";
+                                    joined."End Date ID" := abs_rec."To Date";
+                                    joined."Reason ID" := abs_rec."Cause of Absence Code";
+                                    joined.Duration := workday_count;
+                                    if dim_time.Get(abs_rec."From Date") then begin
+                                        joined.Year := dim_time.Year;
+                                        joined.Month := dim_time.Month;
+                                        joined.Weekday := dim_time.Weekday;
+                                        joined.Workday := dim_time.Workday;
+                                    end;
+                                    if dim_emp.Get(abs_rec."Employee No.") then begin
+                                        joined."First Name" := dim_emp."First Name";
+                                        joined."Last Name" := dim_emp."Last Name";
+                                        joined.Department := dim_emp.Department;
+                                        joined."Employment Date" := dim_emp."Employment Date";
+                                    end;
+                                    if dim_cause.Get(abs_rec."Cause of Absence Code") then begin
+                                        joined.Description := dim_cause.Description;
+                                        joined.Category := dim_cause.Category;
+                                    end;
+                                    joined.Insert();
                                     counter += 1;
                                 end;
                             end;
                         until abs_rec.Next() = 0;
                     end;
-                    MsgTxt := 'ASFT befüllt.';
-                    Message('ASFT befüllt: %1 Abwesenheitsfälle eingefügt.', counter);
+                    MsgTxt := 'ASFT + STAR Joined befüllt.';
+                    Message('ASFT + STAR Joined befüllt: %1 Datensätze.', counter);
                     CurrPage.Update(false);
                 end;
             }
@@ -337,7 +393,7 @@ page 123456747 T20_ControlPanel
             action(FillPSFT)
             {
                 ApplicationArea = All;
-                Caption = 'PSFT befüllen';
+                Caption = 'PSFT + STAR Joined befüllen';
                 Promoted = true;
                 PromotedCategory = Process;
                 trigger OnAction()
@@ -347,6 +403,7 @@ page 123456747 T20_ControlPanel
                     tft_filter: Record T20_TFT_table;
                     dim_time_filter: Record T20_DimTime_table;
                     psft_rec: Record T20_PSFT_table;
+                    joined: Record T20_PSFT_STAR_Joined_table;
                     sick_days: Integer;
                     holiday_days: Integer;
                     workday_count: Integer;
@@ -357,37 +414,30 @@ page 123456747 T20_ControlPanel
                 begin
                     counter := 0;
                     psft_rec.DeleteAll();
+                    joined.DeleteAll();
                     if emp_rec.FindSet() then begin
                         repeat
                             if month_rec.FindSet() then begin
                                 repeat
-                                    // Monatsgrenzen einfach berechnen
                                     month_num := month_rec.Year mod 12;
                                     if month_num = 0 then month_num := 12;
                                     month_start := DMY2Date(1, month_num, month_rec.Year);
                                     month_end := CalcDate('<CM>', month_start);
-
-                                    // Krankheitstage
                                     tft_filter.Reset();
                                     tft_filter.SetRange("Employee No.", emp_rec."Employee No.");
                                     tft_filter.SetRange("Cause of Absence Code", 'KRANK');
                                     tft_filter.SetRange(Date, month_start, month_end);
                                     sick_days := tft_filter.Count();
-
-                                    // Urlaubstage
                                     tft_filter.Reset();
                                     tft_filter.SetRange("Employee No.", emp_rec."Employee No.");
                                     tft_filter.SetRange("Cause of Absence Code", 'URLAUB');
                                     tft_filter.SetRange(Date, month_start, month_end);
                                     holiday_days := tft_filter.Count();
-
-                                    // Mögliche Arbeitstage
                                     dim_time_filter.Reset();
                                     dim_time_filter.SetRange(Date, month_start, month_end);
                                     dim_time_filter.SetRange(Workday, true);
                                     workday_count := dim_time_filter.Count() - 2;
                                     if workday_count < 0 then workday_count := 0;
-
                                     psft_rec.Init();
                                     psft_rec."Month ID" := month_rec.Month;
                                     psft_rec."Employee No." := emp_rec."Employee No.";
@@ -396,14 +446,41 @@ page 123456747 T20_ControlPanel
                                     psft_rec."Total Absent Days" := sick_days + holiday_days;
                                     psft_rec."Possible Workdays" := workday_count;
                                     psft_rec.Insert();
+                                    joined.Init();
+                                    joined."Month ID" := month_rec.Month;
+                                    joined."Employee No." := emp_rec."Employee No.";
+                                    joined."Sick Days in Month" := sick_days;
+                                    joined."Holiday Days in Month" := holiday_days;
+                                    joined."Total Absent Days" := sick_days + holiday_days;
+                                    joined."Possible Workdays" := workday_count;
+                                    joined.Year := month_rec.Year;
+                                    joined."Month Name" := month_rec."Month Name";
+                                    joined."First Name" := emp_rec."First Name";
+                                    joined."Last Name" := emp_rec."Last Name";
+                                    joined.Department := emp_rec.Department;
+                                    joined."Employment Date" := emp_rec."Employment Date";
+                                    joined.Insert();
                                     counter += 1;
                                 until month_rec.Next() = 0;
                             end;
                         until emp_rec.Next() = 0;
                     end;
-                    MsgTxt := 'PSFT befüllt.';
-                    Message('PSFT befüllt: %1 Monatsdatensätze eingefügt.', counter);
+                    MsgTxt := 'PSFT + STAR Joined befüllt.';
+                    Message('PSFT + STAR Joined befüllt: %1 Datensätze.', counter);
                     CurrPage.Update(false);
+                end;
+            }
+            action(CreateBericht1)
+            {
+                ApplicationArea = All;
+                Caption = 'Bericht i generieren (Krankenquote)';
+                Promoted = true;
+                PromotedCategory = Process;
+                trigger OnAction()
+                var
+                    CreateBericht1: Codeunit CreateBericht1;
+                begin
+                    CreateBericht1.Run();
                 end;
             }
         }
