@@ -470,6 +470,19 @@ page 123456747 T20_ControlPanel
                     CurrPage.Update(false);
                 end;
             }
+            action(CreateBericht1)
+            {
+                ApplicationArea = All;
+                Caption = 'Bericht i generieren (Krankenquote)';
+                Promoted = true;
+                PromotedCategory = Process;
+                trigger OnAction()
+                var
+                    CreateBericht1: Codeunit CreateBericht1;
+                begin
+                    CreateBericht1.Run();
+                end;
+            }
         }
     }
 
