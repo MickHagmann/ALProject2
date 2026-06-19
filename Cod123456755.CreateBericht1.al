@@ -19,7 +19,7 @@ codeunit 123456755 CreateBericht1
         varTargetWeekday: Text[30];
         sum_sick_days: Integer;
         emp_count: Integer;
-        workday_occurance_count: Integer;
+        workday_occurrence_count: Integer;
         total_possible_workdays: Integer;
         krankenquote: Decimal;
 
