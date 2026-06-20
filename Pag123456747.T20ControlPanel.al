@@ -418,27 +418,31 @@ page 123456747 T20_ControlPanel
                         repeat
                             if month_rec.FindSet() then begin
                                 repeat
-                                    month_num := month_rec.Year mod 12;
-                                    if month_num = 0 then
-                                        month_num := 12;
+                                    // Monat aus dem Month-String "2026-01" extrahieren
+                                    // Die letzten 2 Zeichen sind die Monatsnummer
+                                    Evaluate(month_num, CopyStr(month_rec.Month, StrLen(month_rec.Month) - 1, 2));
                                     month_start := DMY2Date(1, month_num, month_rec.Year);
                                     month_end := CalcDate('<CM>', month_start);
+
                                     tft_filter.Reset();
                                     tft_filter.SetRange("Employee No.", emp_rec."Employee No.");
                                     tft_filter.SetRange("Cause of Absence Code", 'KRANK');
                                     tft_filter.SetRange(Date, month_start, month_end);
                                     sick_days := tft_filter.Count();
+
                                     tft_filter.Reset();
                                     tft_filter.SetRange("Employee No.", emp_rec."Employee No.");
                                     tft_filter.SetRange("Cause of Absence Code", 'URLAUB');
                                     tft_filter.SetRange(Date, month_start, month_end);
                                     holiday_days := tft_filter.Count();
+
                                     dim_time_filter.Reset();
                                     dim_time_filter.SetRange(Date, month_start, month_end);
                                     dim_time_filter.SetRange(Workday, true);
                                     workday_count := dim_time_filter.Count() - 2;
                                     if workday_count < 0 then
                                         workday_count := 0;
+
                                     psft_rec.Init();
                                     psft_rec."Month ID" := month_rec.Month;
                                     psft_rec."Employee No." := emp_rec."Employee No.";
@@ -447,6 +451,7 @@ page 123456747 T20_ControlPanel
                                     psft_rec."Total Absent Days" := sick_days + holiday_days;
                                     psft_rec."Possible Workdays" := workday_count;
                                     psft_rec.Insert();
+
                                     joined.Init();
                                     joined."Month ID" := month_rec.Month;
                                     joined."Employee No." := emp_rec."Employee No.";
@@ -566,6 +571,7 @@ page 123456747 T20_ControlPanel
                     DimEmployee: Record T20_DimEmployee_table;
                     ASFT_Joined: Record T20_ASFT_STAR_Joined_table;
                     report_out: Record T20_Report_Output_table;
+                    check_rec: Record T20_Report_Output_table;
                     varTargetYear: Integer;
                     count_all: Integer;
                     count_monday: Integer;
@@ -577,11 +583,11 @@ page 123456747 T20_ControlPanel
                     report_out.DeleteAll();
 
                     DimEmployee.Reset();
-                    DimEmployee.SetCurrentKey(Department);
                     if DimEmployee.FindSet() then begin
                         repeat
-                            report_out.Reset();
-                            if not report_out.Get('ii', DimEmployee.Department, '') then begin
+                            // Jede Abteilung nur einmal verarbeiten (eigene Prüf-Variable)
+                            check_rec.Reset();
+                            if not check_rec.Get('ii', DimEmployee.Department, '') then begin
                                 ASFT_Joined.Reset();
                                 ASFT_Joined.SetRange(Department, DimEmployee.Department);
                                 ASFT_Joined.SetRange(Year, varTargetYear);
