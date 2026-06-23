@@ -418,8 +418,6 @@ page 123456747 T20_ControlPanel
                         repeat
                             if month_rec.FindSet() then begin
                                 repeat
-                                    // Monat aus dem Month-String "2026-01" extrahieren
-                                    // Die letzten 2 Zeichen sind die Monatsnummer
                                     Evaluate(month_num, CopyStr(month_rec.Month, StrLen(month_rec.Month) - 1, 2));
                                     month_start := DMY2Date(1, month_num, month_rec.Year);
                                     month_end := CalcDate('<CM>', month_start);
@@ -485,35 +483,36 @@ page 123456747 T20_ControlPanel
                 PromotedCategory = Process;
                 trigger OnAction()
                 var
-                    DimEmployee: Record T20_DimEmployee_table;
                     DimTime: Record T20_DimTime_table;
                     TFT_Joined: Record T20_TFT_STAR_Joined_table;
+                    DimEmployee: Record T20_DimEmployee_table;
                     report_out: Record T20_Report_Output_table;
-                    months: array[3] of Text[30];
+                    monthNames: array[3] of Text[30];
+                    monthNums: array[3] of Integer;
+                    monthYears: array[3] of Integer;
                     selected: array[3] of Boolean;
                     m: Integer;
-                    weekdays: array[5] of Text[20];
-                    i: Integer;
-                    varTargetYear: Integer;
-                    sum_sick: Integer;
+                    wd: Integer;
+                    sickByDay: array[7] of Integer;
+                    workByDay: array[7] of Integer;
                     emp_count: Integer;
-                    workday_occ: Integer;
+                    month_start: Date;
+                    month_end: Date;
                     total_possible: Integer;
                     quote: Decimal;
                 begin
-                    varTargetYear := 2026;
-                    months[1] := 'December';
-                    months[2] := 'January';
-                    months[3] := 'February';
+                    monthNames[1] := 'Dezember';
+                    monthNums[1] := 12;
+                    monthYears[1] := 2025;
+                    monthNames[2] := 'Januar';
+                    monthNums[2] := 1;
+                    monthYears[2] := 2026;
+                    monthNames[3] := 'Februar';
+                    monthNums[3] := 2;
+                    monthYears[3] := 2026;
 
-                    if not InputMonths(months, selected) then
+                    if not InputMonths(monthNames, selected) then
                         exit;
-
-                    weekdays[1] := 'Monday';
-                    weekdays[2] := 'Tuesday';
-                    weekdays[3] := 'Wednesday';
-                    weekdays[4] := 'Thursday';
-                    weekdays[5] := 'Friday';
 
                     report_out.SetRange(ReportType, 'i');
                     report_out.DeleteAll();
@@ -522,33 +521,46 @@ page 123456747 T20_ControlPanel
 
                     for m := 1 to 3 do begin
                         if selected[m] then begin
-                            for i := 1 to 5 do begin
-                                TFT_Joined.Reset();
-                                TFT_Joined.SetRange(Month, months[m]);
-                                TFT_Joined.SetRange(Year, varTargetYear);
-                                TFT_Joined.SetRange(Weekday, weekdays[i]);
-                                TFT_Joined.SetRange("Cause of Absence Code", 'KRANK');
-                                sum_sick := TFT_Joined.Count();
+                            month_start := DMY2Date(1, monthNums[m], monthYears[m]);
+                            month_end := CalcDate('<CM>', month_start);
 
-                                DimTime.Reset();
-                                DimTime.SetRange(Month, months[m]);
-                                DimTime.SetRange(Year, varTargetYear);
-                                DimTime.SetRange(Weekday, weekdays[i]);
-                                DimTime.SetRange(Workday, true);
-                                workday_occ := DimTime.Count();
+                            Clear(sickByDay);
+                            Clear(workByDay);
 
-                                total_possible := emp_count * workday_occ;
+                            // Krankheitstage pro Wochentag (aus Datum berechnet)
+                            TFT_Joined.Reset();
+                            TFT_Joined.SetRange("Cause of Absence Code", 'KRANK');
+                            TFT_Joined.SetRange(Date, month_start, month_end);
+                            if TFT_Joined.FindSet() then
+                                repeat
+                                    wd := Date2DWY(TFT_Joined.Date, 1);
+                                    if (wd >= 1) and (wd <= 5) then
+                                        sickByDay[wd] += 1;
+                                until TFT_Joined.Next() = 0;
 
+                            // Mögliche Arbeitstage pro Wochentag
+                            DimTime.Reset();
+                            DimTime.SetRange(Date, month_start, month_end);
+                            DimTime.SetRange(Workday, true);
+                            if DimTime.FindSet() then
+                                repeat
+                                    wd := Date2DWY(DimTime.Date, 1);
+                                    if (wd >= 1) and (wd <= 5) then
+                                        workByDay[wd] += 1;
+                                until DimTime.Next() = 0;
+
+                            for wd := 1 to 5 do begin
+                                total_possible := emp_count * workByDay[wd];
                                 if total_possible > 0 then
-                                    quote := sum_sick / total_possible
+                                    quote := sickByDay[wd] / total_possible
                                 else
                                     quote := 0.0;
 
                                 report_out.Init();
                                 report_out.ReportType := 'i';
-                                report_out.Aufriss1 := weekdays[i];
-                                report_out.Aufriss2 := months[m];
-                                report_out.Fakt1 := sum_sick;
+                                report_out.Aufriss1 := GetWeekdayName(wd);
+                                report_out.Aufriss2 := monthNames[m];
+                                report_out.Fakt1 := sickByDay[wd];
                                 report_out.Fakt2 := total_possible;
                                 report_out.Quote := quote;
                                 report_out.Insert();
@@ -575,49 +587,56 @@ page 123456747 T20_ControlPanel
                     years: array[2] of Integer;
                     selected: array[2] of Boolean;
                     yIdx: Integer;
-                    count_all: Integer;
+                    total_all_single: Integer;
                     count_monday: Integer;
                     quote: Decimal;
                 begin
-                    // Verfügbare Jahre
                     years[1] := 2025;
                     years[2] := 2026;
 
-                    // Jahresauswahl abfragen
                     if not InputYears(years, selected) then
                         exit;
 
                     report_out.SetRange(ReportType, 'ii');
                     report_out.DeleteAll();
 
+                    // 1. Gesamtheit ALLER eintägigen Krankheitsfälle (über alle Abteilungen)
+                    total_all_single := 0;
+                    for yIdx := 1 to 2 do begin
+                        if selected[yIdx] then begin
+                            ASFT_Joined.Reset();
+                            ASFT_Joined.SetRange(Year, years[yIdx]);
+                            ASFT_Joined.SetRange(Duration, 1);
+                            ASFT_Joined.SetRange("Reason ID", 'KRANK');
+                            total_all_single += ASFT_Joined.Count();
+                        end;
+                    end;
+
+                    // 2. Pro Abteilung die Montags-Fälle zählen und durch die Gesamtheit teilen
                     DimEmployee.Reset();
                     if DimEmployee.FindSet() then begin
                         repeat
-                            // Jede Abteilung nur einmal verarbeiten
                             check_rec.Reset();
                             if not check_rec.Get('ii', DimEmployee.Department, '') then begin
-                                count_all := 0;
                                 count_monday := 0;
 
-                                // Über die gewählten Jahre summieren
                                 for yIdx := 1 to 2 do begin
                                     if selected[yIdx] then begin
-                                        // Alle eintägigen ungeplanten Fälle der Abteilung im Jahr
                                         ASFT_Joined.Reset();
                                         ASFT_Joined.SetRange(Department, DimEmployee.Department);
                                         ASFT_Joined.SetRange(Year, years[yIdx]);
                                         ASFT_Joined.SetRange(Duration, 1);
-                                        ASFT_Joined.SetRange(Category, 'Unplanned');
-                                        count_all += ASFT_Joined.Count();
-
-                                        // Davon die an einem Montag
-                                        ASFT_Joined.SetRange(Weekday, 'Monday');
-                                        count_monday += ASFT_Joined.Count();
+                                        ASFT_Joined.SetRange("Reason ID", 'KRANK');
+                                        if ASFT_Joined.FindSet() then
+                                            repeat
+                                                if Date2DWY(ASFT_Joined."Starting Date ID", 1) = 1 then
+                                                    count_monday += 1;
+                                            until ASFT_Joined.Next() = 0;
                                     end;
                                 end;
 
-                                if count_all > 0 then
-                                    quote := count_monday / count_all
+                                if total_all_single > 0 then
+                                    quote := count_monday / total_all_single
                                 else
                                     quote := 0.0;
 
@@ -626,7 +645,7 @@ page 123456747 T20_ControlPanel
                                 report_out.Aufriss1 := DimEmployee.Department;
                                 report_out.Aufriss2 := '';
                                 report_out.Fakt1 := count_monday;
-                                report_out.Fakt2 := count_all;
+                                report_out.Fakt2 := total_all_single;
                                 report_out.Quote := quote;
                                 report_out.Insert();
                             end;
@@ -711,6 +730,20 @@ page 123456747 T20_ControlPanel
         MsgTxt := '(noch keine Aktion ausgeführt)';
     end;
 
+    procedure InputMonths(months: array[3] of Text[30]; var selected: array[3] of Boolean): Boolean
+    var
+        m: Integer;
+        anySelected: Boolean;
+    begin
+        anySelected := false;
+        for m := 1 to 3 do begin
+            selected[m] := Confirm('Monat %1 einbeziehen?', false, months[m]);
+            if selected[m] then
+                anySelected := true;
+        end;
+        exit(anySelected);
+    end;
+
     procedure InputYears(years: array[2] of Integer; var selected: array[2] of Boolean): Boolean
     var
         yIdx: Integer;
@@ -725,18 +758,24 @@ page 123456747 T20_ControlPanel
         exit(anySelected);
     end;
 
-    procedure InputMonths(months: array[3] of Text[30]; var selected: array[3] of Boolean): Boolean
-    var
-        m: Integer;
-        anySelected: Boolean;
+    procedure GetWeekdayName(DayNum: Integer): Text[20]
     begin
-        anySelected := false;
-        for m := 1 to 3 do begin
-            selected[m] := Confirm('Monat %1 einbeziehen?', false, months[m]);
-            if selected[m] then
-                anySelected := true;
+        case DayNum of
+            1:
+                exit('Montag');
+            2:
+                exit('Dienstag');
+            3:
+                exit('Mittwoch');
+            4:
+                exit('Donnerstag');
+            5:
+                exit('Freitag');
+            6:
+                exit('Samstag');
+            7:
+                exit('Sonntag');
         end;
-        exit(anySelected);
     end;
 
     var
