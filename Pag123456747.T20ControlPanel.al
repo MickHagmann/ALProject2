@@ -572,12 +572,20 @@ page 123456747 T20_ControlPanel
                     ASFT_Joined: Record T20_ASFT_STAR_Joined_table;
                     report_out: Record T20_Report_Output_table;
                     check_rec: Record T20_Report_Output_table;
-                    varTargetYear: Integer;
+                    years: array[2] of Integer;
+                    selected: array[2] of Boolean;
+                    yIdx: Integer;
                     count_all: Integer;
                     count_monday: Integer;
                     quote: Decimal;
                 begin
-                    varTargetYear := 2026;
+                    // Verfügbare Jahre
+                    years[1] := 2025;
+                    years[2] := 2026;
+
+                    // Jahresauswahl abfragen
+                    if not InputYears(years, selected) then
+                        exit;
 
                     report_out.SetRange(ReportType, 'ii');
                     report_out.DeleteAll();
@@ -585,18 +593,28 @@ page 123456747 T20_ControlPanel
                     DimEmployee.Reset();
                     if DimEmployee.FindSet() then begin
                         repeat
-                            // Jede Abteilung nur einmal verarbeiten (eigene Prüf-Variable)
+                            // Jede Abteilung nur einmal verarbeiten
                             check_rec.Reset();
                             if not check_rec.Get('ii', DimEmployee.Department, '') then begin
-                                ASFT_Joined.Reset();
-                                ASFT_Joined.SetRange(Department, DimEmployee.Department);
-                                ASFT_Joined.SetRange(Year, varTargetYear);
-                                ASFT_Joined.SetRange(Duration, 1);
-                                ASFT_Joined.SetRange(Category, 'Unplanned');
-                                count_all := ASFT_Joined.Count();
+                                count_all := 0;
+                                count_monday := 0;
 
-                                ASFT_Joined.SetRange(Weekday, 'Monday');
-                                count_monday := ASFT_Joined.Count();
+                                // Über die gewählten Jahre summieren
+                                for yIdx := 1 to 2 do begin
+                                    if selected[yIdx] then begin
+                                        // Alle eintägigen ungeplanten Fälle der Abteilung im Jahr
+                                        ASFT_Joined.Reset();
+                                        ASFT_Joined.SetRange(Department, DimEmployee.Department);
+                                        ASFT_Joined.SetRange(Year, years[yIdx]);
+                                        ASFT_Joined.SetRange(Duration, 1);
+                                        ASFT_Joined.SetRange(Category, 'Unplanned');
+                                        count_all += ASFT_Joined.Count();
+
+                                        // Davon die an einem Montag
+                                        ASFT_Joined.SetRange(Weekday, 'Monday');
+                                        count_monday += ASFT_Joined.Count();
+                                    end;
+                                end;
 
                                 if count_all > 0 then
                                     quote := count_monday / count_all
@@ -615,7 +633,7 @@ page 123456747 T20_ControlPanel
                         until DimEmployee.Next() = 0;
                     end;
 
-                    Message('Bericht ii berechnet für %1.', varTargetYear);
+                    Message('Bericht ii berechnet.');
                 end;
             }
 
@@ -691,6 +709,20 @@ page 123456747 T20_ControlPanel
     trigger OnOpenPage()
     begin
         MsgTxt := '(noch keine Aktion ausgeführt)';
+    end;
+
+    procedure InputYears(years: array[2] of Integer; var selected: array[2] of Boolean): Boolean
+    var
+        yIdx: Integer;
+        anySelected: Boolean;
+    begin
+        anySelected := false;
+        for yIdx := 1 to 2 do begin
+            selected[yIdx] := Confirm('Jahr %1 einbeziehen?', false, years[yIdx]);
+            if selected[yIdx] then
+                anySelected := true;
+        end;
+        exit(anySelected);
     end;
 
     procedure InputMonths(months: array[3] of Text[30]; var selected: array[3] of Boolean): Boolean
